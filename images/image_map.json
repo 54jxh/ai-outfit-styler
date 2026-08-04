@@ -1,0 +1,102 @@
+{
+  "t1": {
+    "file": "images/t1.jpg",
+    "size": 24051
+  },
+  "t2": {
+    "file": "images/t2.jpg",
+    "size": 39676
+  },
+  "t3": {
+    "file": "images/t3.jpg",
+    "size": 41826
+  },
+  "t4": {
+    "file": "images/t4.jpg",
+    "size": 23068
+  },
+  "b2": {
+    "file": "images/b2.jpg",
+    "size": 31889
+  },
+  "b3": {
+    "file": "images/b3.jpg",
+    "size": 49511
+  },
+  "o1": {
+    "file": "images/o1.jpg",
+    "size": 29105
+  },
+  "o3": {
+    "file": "images/o3.jpg",
+    "size": 28549
+  },
+  "d1": {
+    "file": "images/d1.jpg",
+    "size": 44842
+  },
+  "d2": {
+    "file": "images/d2.jpg",
+    "size": 52243
+  },
+  "s1": {
+    "file": "images/s1.jpg",
+    "size": 34338
+  },
+  "s4": {
+    "file": "images/s4.jpg",
+    "size": 23510
+  },
+  "a1": {
+    "file": "images/a1.jpg",
+    "size": 12220
+  },
+  "a3": {
+    "file": "images/a3.jpg",
+    "size": 24418
+  },
+  "g1": {
+    "file": "images/g1.jpg",
+    "size": 29706
+  },
+  "b1": {
+    "file": "images/b1.jpg",
+    "size": 41594
+  },
+  "o2": {
+    "file": "images/o2.jpg",
+    "size": 18711
+  },
+  "g2": {
+    "file": "images/g2.jpg",
+    "size": 33009
+  },
+  "g3": {
+    "file": "images/g3.jpg",
+    "size": 19220
+  },
+  "b4": {
+    "file": "images/b4.jpg",
+    "size": 13326
+  },
+  "o4": {
+    "file": "images/o4.jpg",
+    "size": 28549
+  },
+  "s2": {
+    "file": "images/s2.jpg",
+    "size": 39728
+  },
+  "a4": {
+    "file": "images/a4.jpg",
+    "size": 31434
+  },
+  "s3": {
+    "file": "images/s3.jpg",
+    "size": 38437
+  },
+  "a2": {
+    "file": "images/a2.jpg",
+    "size": 74916
+  }
+}
