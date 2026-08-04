@@ -634,6 +634,32 @@ input, select {
   background: var(--danger);
 }
 
+.zone-tryon {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--primary, #0d9488);
+  background: rgba(13, 148, 136, 0.12);
+  color: var(--primary, #0d9488);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  z-index: 2;
+  transition: var(--transition);
+  line-height: 1.2;
+}
+.zone-tryon:hover,
+.zone-tryon.active {
+  background: var(--primary, #0d9488);
+  color: #fff;
+}
+.drop-zone.tryon-active {
+  border-color: var(--primary, #0d9488);
+  box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.18);
+}
+
 /* Styling Footer */
 .styling-footer {
   padding: 12px 14px;

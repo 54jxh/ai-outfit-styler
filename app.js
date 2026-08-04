@@ -1,7 +1,7 @@
 // ==========================================
-// AI 真人换装搭配工具 - 核心逻辑 v12 (真人照片 + Kolors 在线换装)
+// AI 真人换装搭配工具 - 核心逻辑 v13 (真人照片 + Kolors 在线换装)
 // ==========================================
-console.log('🟢 app.js v12 loaded - Real Person + Kolors Virtual Try-On');
+console.log('🟢 app.js v13 loaded - Real Person + Kolors Virtual Try-On');
 
 // ----- 配置 -----
 const CONFIG = {
@@ -114,6 +114,7 @@ let state = {
   currentStyle: 'casual',
   isGenerating: false,
   currentResultUrl: '',
+  tryonCategory: null, // 用户手动指定的本次AI换装单品类别
   personImage: localStorage.getItem(CONFIG.PERSON_PHOTO_STORAGE_KEY) || CONFIG.MODEL_REF_IMG,
   customItemImage: null, // modal 临时存储
   editingItemId: null,   // 编辑中的单品 id
@@ -415,9 +416,13 @@ function renderDropZones() {
     const selected = state.selectedItems[key];
     if (selected) {
       const imgUrl = getItemImageUrl(selected);
+      const autoTryon = (getTryonClothingItem() || {}).cat;
+      const isTryon = (state.tryonCategory || autoTryon) === key;
+      const canTryon = CLOTHING_CATEGORIES.includes(key);
       return `
-        <div class="drop-zone filled" data-cat="${key}">
+        <div class="drop-zone filled ${isTryon ? 'tryon-active' : ''}" data-cat="${key}">
           <button class="zone-remove" data-cat="${key}">×</button>
+          ${canTryon ? `<button class="zone-tryon ${isTryon ? 'active' : ''}" data-cat="${key}" title="设为本次AI换装单品">换装</button>` : ''}
           <div class="zone-content">
             <div class="zone-content-img">
               <img src="${imgUrl}" alt="${selected.name}" loading="lazy" data-emoji="${selected.emoji}" onerror="imgFallback(this)">
@@ -453,7 +458,31 @@ function renderDropZones() {
     });
   });
 
+  // 绑定“设为本次换装单品”按钮
+  dom.dropZonesGrid.querySelectorAll('.zone-tryon').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      state.tryonCategory = state.tryonCategory === btn.dataset.cat ? null : btn.dataset.cat;
+      renderDropZones();
+      updateTryonHint();
+    });
+  });
+
+  updateTryonHint();
   updateGenerateButton();
+}
+
+// 生成按钮下方的提示：本次AI换装用哪件
+function updateTryonHint() {
+  const el = document.querySelector('.generate-note');
+  if (!el) return;
+  const info = getTryonClothingItem();
+  if (info) {
+    const catName = CATEGORIES[info.cat].name;
+    el.innerHTML = `本次 AI 换装：${catName} · ${info.item.name}（点击搭配区"换装"标签可切换）`;
+  } else {
+    el.innerHTML = '选择上衣 / 外套 / 连衣裙 / 下装后即可 AI 真人换装';
+  }
 }
 
 // ==========================================
@@ -507,6 +536,7 @@ function removeFromZone(category) {
   const item = state.selectedItems[category];
   if (item) {
     delete state.selectedItems[category];
+    if (state.tryonCategory === category) state.tryonCategory = null;
     renderDropZones();
     renderItems();
     saveToStorage();
@@ -609,16 +639,25 @@ function deleteSet(id) {
 // 人像 = 用户上传的真人照片；服装 = 单品库图片；AI 只负责把衣服贴合到真人身上
 // ==========================================
 
-// 获取当前选中服装的图片URL（取第一件选中的服装）
-function getSelectedClothingImage() {
-  const order = ['top', 'dress', 'outerwear', 'bottom', 'shoes', 'accessory', 'bag'];
-  for (const cat of order) {
+// 可参与AI换装的衣服类别（鞋/配饰/包不参与）
+const CLOTHING_CATEGORIES = ['outerwear', 'top', 'dress', 'bottom'];
+
+// 获取本次AI换装要使用的衣服：用户指定 > 自动优先外套 > 上衣 > 连衣裙 > 下装
+function getTryonClothingItem() {
+  if (state.tryonCategory && state.selectedItems[state.tryonCategory]) {
+    return { cat: state.tryonCategory, item: state.selectedItems[state.tryonCategory] };
+  }
+  for (const cat of CLOTHING_CATEGORIES) {
     const item = state.selectedItems[cat];
-    if (item) {
-      return getItemImageUrl(item);
-    }
+    if (item) return { cat, item };
   }
   return null;
+}
+
+// 获取当前选中服装的图片URL
+function getSelectedClothingImage() {
+  const info = getTryonClothingItem();
+  return info ? getItemImageUrl(info.item) : null;
 }
 
 function getPersonPhotoUrl() {
@@ -781,11 +820,15 @@ async function generateOutfit() {
     return;
   }
 
-  // 每次换装 1 件主服装
-  const clothingCount = ['top', 'dress', 'outerwear', 'bottom', 'shoes'].filter(c => state.selectedItems[c]).length;
-  if (clothingCount > 1) {
-    showToast('每次换装1件服装，将使用第一件单品', 'warning');
+  // 确定本次AI换装的主单品（外套优先）
+  const tryonInfo = getTryonClothingItem();
+  if (!tryonInfo) {
+    showToast('请选择上衣、外套、连衣裙或下装中的一件', 'warning');
+    return;
   }
+  if (!state.tryonCategory) state.tryonCategory = tryonInfo.cat;
+  const tryonCatName = CATEGORIES[tryonInfo.cat].name;
+  showToast(`本次 AI 换装单品：${tryonCatName} · ${tryonInfo.item.name}`, 'info');
 
   state.isGenerating = true;
   updateGenerateButton();
@@ -921,6 +964,7 @@ function randomOutfit() {
 // ==========================================
 function clearAll() {
   state.selectedItems = {};
+  state.tryonCategory = null;
   renderDropZones();
   renderItems();
   saveToStorage();
