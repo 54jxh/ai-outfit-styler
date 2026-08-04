@@ -24,13 +24,20 @@ with sync_playwright() as p:
         record_video_dir=str(VIDEO),
         record_video_size={'width': 1440, 'height': 900},
     )
+    # 拦截外部字体，避免截图等待字体加载
+    context.route('**/*.woff*', lambda route: route.abort())
+    context.route('**/*.ttf*', lambda route: route.abort())
+    context.route('**/fonts.googleapis.com/**', lambda route: route.abort())
     page = context.new_page()
     page.on('console', lambda msg: errors.append(f'console[{msg.type}]: {msg.text[:200]}') if msg.type == 'error' else None)
     page.on('pageerror', lambda exc: errors.append(f'pageerror: {str(exc)[:300]}'))
 
     def shot(name):
-        page.screenshot(path=str(SHOTS / f'{name}.png'))
-        print('shot:', name)
+        try:
+            page.screenshot(path=str(SHOTS / f'{name}.png'), timeout=8000)
+            print('shot:', name)
+        except Exception as exc:
+            print('shot failed:', name, str(exc)[:100])
 
     page.goto(URL, wait_until='domcontentloaded', timeout=60000)
     print('step: goto', flush=True)
@@ -68,13 +75,24 @@ with sync_playwright() as p:
     print('step: outfit', flush=True)
     shot('04_outfit')
 
-    # 4) 拖拽配饰
+    # 4) 拖拽配饰（手动鼠标拖拽；失败则点击加入，保证演示不卡住）
     try:
-        page.locator('.item-card[data-id="a2"]').drag_to(page.locator('.drop-zone[data-cat="accessory"]'))
-        page.wait_for_timeout(1200)
-        print('drag accessory ok')
+        src = page.locator('.item-card[data-id="a2"]').bounding_box()
+        dst = page.locator('.drop-zone[data-cat="accessory"]').bounding_box()
+        if src and dst:
+            page.mouse.move(src['x'] + src['width'] / 2, src['y'] + src['height'] / 2)
+            page.mouse.down()
+            page.mouse.move(dst['x'] + dst['width'] / 2, dst['y'] + dst['height'] / 2, steps=12)
+            page.wait_for_timeout(300)
+            page.mouse.up()
+            page.wait_for_timeout(1200)
+            print('drag accessory ok')
+        else:
+            raise RuntimeError('no bounding box')
     except Exception as exc:
-        print('drag failed:', exc)
+        print('drag failed, fallback click:', str(exc)[:120])
+        page.click('.item-card[data-id="a2"]')
+        page.wait_for_timeout(900)
     print('step: drag', flush=True)
     shot('05_drag')
 
@@ -100,7 +118,8 @@ with sync_playwright() as p:
         for _ in range(60):
             page.wait_for_timeout(2000)
             if page.locator('.result-error').count() > 0:
-                print('error block:', page.locator('.result-error').inner_text()[:200])
+                err_txt = page.locator('.result-error').inner_text()[:200].encode('ascii', 'replace').decode()
+                print('error block:', err_txt)
                 page.locator('.result-error button').first.click()
                 page.wait_for_timeout(2500)
                 break

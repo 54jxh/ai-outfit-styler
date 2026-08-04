@@ -1,21 +1,16 @@
 import json
+import sys
 import time
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
-URL = 'http://localhost:8099/'
+URL = sys.argv[1] if len(sys.argv) > 1 else 'http://localhost:8099/'
 errors = []
 
 with sync_playwright() as p:
-    context = p.chromium.launch_persistent_context(
-        user_data_dir='C:/Temp/codex-smoke-profile',
-        channel='msedge',
-        headless=True,
-        args=['--disable-web-security'],
-        viewport={'width': 1440, 'height': 900},
-    )
-    page = context.pages[0] if context.pages else context.new_page()
+    browser = p.chromium.launch(channel='msedge', headless=True)
+    page = browser.new_page(viewport={'width': 1440, 'height': 900})
     page.on('console', lambda msg: errors.append(f'console[{msg.type}]: {msg.text[:200]}') if msg.type == 'error' else None)
     page.on('pageerror', lambda exc: errors.append(f'pageerror: {str(exc)[:300]}'))
 
@@ -70,4 +65,4 @@ with sync_playwright() as p:
     page.screenshot(path=str(Path.cwd() / 'tools' / 'smoke_result.png'))
     print('error_seen:', error_seen)
     print('console errors:', json.dumps(errors, ensure_ascii=False)[:2000])
-    context.close()
+    browser.close()
