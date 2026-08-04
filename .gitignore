@@ -1,5 +1,9 @@
 node_modules/
 tools/*.exe
 tools/*.log
+tools/*.txt
 *.log
 __pycache__/
+demo_shots/
+demo_video/
+demo_backup.json

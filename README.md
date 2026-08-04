@@ -1,76 +1,50 @@
 # AI 穿搭搭配工具 - OUTFIT PREVIEW
 
-## 项目简介
-基于 Vibe Coding 开发的简易 AI 穿搭搭配工具，支持单品库管理、拖拽搭配、AI 图像生成三大核心功能。
+基于 Vibe Coding 开发的简易 AI 穿搭搭配工具，用于面试演示。
 
-## 技术栈
-- **前端**: HTML5 + CSS3 + 原生 JavaScript (ES6+)
-- **AI 接口**: Pollinations.ai (免费图像生成 API，无需 API Key)
-- **存储**: LocalStorage 本地持久化
-- **部署**: 零依赖，纯静态文件
+## 线上 Demo
+
+- **GitHub Pages（正式链接）**：<https://54jxh.github.io/ai-outfit-styler/>
+- **源码仓库**：<https://github.com/54jxh/ai-outfit-styler>
+- 备用隧道链接（带本地代理，支持虚拟试衣）：运行 `tools/start_pinggy.ps1` 或 `tools/start_demo.ps1` 后查看临时 URL；首次访问隧道提示页需点击进入。
 
 ## 三大功能区
 
-### 1. 单品库区（左侧）
-- 25 件预置服装单品（上衣、下装、外套、连衣裙、鞋、配饰、包）
-- 按类别筛选（全部/上衣/下装/外套/连衣裙/鞋/配饰/包）
-- 按季节筛选
-- 关键词搜索（名称、颜色）
-- 自定义添加衣服（上传图片 + 填写信息）
+1. **单品库区（左侧）**：25 件预设单品（上衣 / 下装 / 外套 / 连衣裙 / 鞋 / 配饰 / 包），支持类别、季节、场合筛选，支持按名称、颜色、备注搜索；可添加、编辑衣服，导入 / 导出 JSON 备份。
+2. **拖拽搭配区（中间）**：拖拽或点击加入单品，支持随机搭配、清空、风格预设（休闲 / 正式 / 街头 / 优雅 / 极简）、保存套装、套装载入。
+3. **穿搭成果展示区（右侧）**：对接 AI 图像生成接口（Pollinations.ai 免费文生图，无需 API Key），自动生成穿搭效果图，支持下载与重新生成；本地代理模式下还可使用 IDM-VTON 虚拟试衣，保持模特脸部不变。
 
-### 2. 拖拽搭配区（中间）
-- 7 个类别拖放区（上衣、外套、下装、连衣裙、鞋、配饰、包）
-- HTML5 原生拖拽 API
-- 点击单品快速添加
-- 悬停移除单品
-- 随机搭配一键生成
-- 风格预设（休闲/正式/街头/优雅/极简）
-- 保存套装功能
+## 本地运行
 
-### 3. 穿搭成果展示区（右侧）
-- 对接 AI 图像生成接口 (Pollinations.ai)
-- 根据选中单品 + 风格自动构建 Prompt
-- 加载动画 + 超时处理
-- 生成结果下载
-- 一键重新生成
-- 搭配摘要展示
+方式一（推荐，支持虚拟试衣）：
 
-## 运行方式
-
-### 方式一：本地服务器（推荐）
 ```bash
-cd ai-outfit-styler
-python -m http.server 8090
-# 浏览器打开 http://localhost:8090/
+python server.py
+# 访问 http://localhost:8899
 ```
 
-### 方式二：直接打开
-双击 `index.html` 即可在浏览器中运行
+方式二（纯静态，直连 AI 生图）：
 
-## 文件结构
-```
-ai-outfit-styler/
-├── index.html    # HTML 结构
-├── style.css     # 样式文件
-├── app.js        # 应用逻辑
-└── README.md     # 说明文档
+```bash
+python -m http.server 8099 -d .
+# 访问 http://localhost:8099
 ```
 
-## 额外功能
-- 导入/导出备份 (JSON)
-- 自定义添加衣服（图片上传）
-- LocalStorage 自动保存
-- 响应式布局（适配移动端）
-- Toast 通知提示
+## 技术栈
 
-## 演示视频建议流程
-1. 打开应用，展示三大区域布局
-2. 在单品库中浏览/搜索服装
-3. 拖拽或点击单品到搭配区
-4. 尝试"随机搭配"功能
-5. 选择风格预设
-6. 点击"AI 生成穿搭"，展示加载过程
-7. 展示 AI 生成的穿搭效果图
-8. 演示下载、重新生成功能
-9. 演示添加自定义衣服
-10. 演示导出/导入备份
+- 前端：HTML5 + CSS3 + 原生 JavaScript（零构建依赖）
+- AI 接口：Pollinations.ai 文生图、IDM-VTON 虚拟试衣
+- 存储：LocalStorage 本地持久化
+- 部署：GitHub Pages（静态直连模式）
+
+## 演示视频
+
+操作演示视频见 `demo/` 目录：`AI穿搭搭配工具_操作演示.mp4`。
+
+## 自动化脚本（tools/）
+
+- `demo_run.py`：Playwright + Edge 自动化操作并录屏
+- `start_static.py`：启动纯静态服务器
+- `start_pinggy.ps1`：启动 Pinggy 隧道（备用在线链接）
+- `start_demo.ps1`：启动本地服务 + localhost.run 隧道
+- `deploy.py`：GitHub 仓库与 Pages 配置

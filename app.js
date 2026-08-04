@@ -18,7 +18,7 @@ const CONFIG = {
   VTRYON_TIMEOUT: 300000,   // 虚拟试衣超时5分钟
   DATA_VERSION: 8,           // 数据版本（v8 = 本地代理模式）
   // ===== 试衣模式: 'tryon'（虚拟试衣，保持脸部）或 'generate'（快速生成）=====
-  TRYON_MODE: localStorage.getItem('tryon_mode') || 'tryon',
+  TRYON_MODE: localStorage.getItem('tryon_mode') || 'generate',
 };
 
 // ==========================================

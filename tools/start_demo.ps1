@@ -4,8 +4,9 @@ $tools = Join-Path $proj 'tools'
 New-Item -ItemType Directory -Path $tools -Force | Out-Null
 $serverLog = Join-Path $tools 'server.log'
 $serverErr = Join-Path $tools 'server.err.log'
-$tunnelOut = Join-Path $tools 'tunnel.out.log'
-$tunnelErr = Join-Path $tools 'tunnel.err.log'
+$tunnelOut = Join-Path $env:TEMP 'tunnel.out.log'
+$tunnelErr = Join-Path $env:TEMP 'tunnel.err.log'
+$tunnelUrlFile = Join-Path $env:TEMP 'tunnel.url.txt'
 
 # 1) 启动本地服务（若未运行）
 $health = $null
@@ -36,7 +37,9 @@ for ($i = 0; $i -lt 30; $i++) {
   if (Test-Path $tunnelOut) { $all += Get-Content $tunnelOut -Raw -ErrorAction SilentlyContinue }
   if (Test-Path $tunnelErr) { $all += Get-Content $tunnelErr -Raw -ErrorAction SilentlyContinue }
   if ($all -match 'https://[a-z0-9-]+\.lhr\.life') {
-    Write-Output "TUNNEL_URL=$($Matches[0])"
+    $url = $Matches[0]
+    Set-Content -LiteralPath $tunnelUrlFile -Value $url -Encoding UTF8
+    Write-Output "TUNNEL_URL=$url"
     exit 0
   }
 }
