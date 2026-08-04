@@ -665,44 +665,54 @@ async function kolorsUpload(blob, fileName) {
 
 // 轮询 Gradio SSE 队列，直到 process_completed
 async function kolorsPoll(sessionHash, timeout) {
-  const resp = await fetch(`${CONFIG.KOLORS_BASE}/queue/data?session_hash=${sessionHash}`);
-  if (!resp.ok || !resp.body) throw new Error('无法连接AI换装服务');
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeout);
+  try {
+    const resp = await fetch(`${CONFIG.KOLORS_BASE}/queue/data?session_hash=${sessionHash}`, { signal: ctrl.signal });
+    if (!resp.ok || !resp.body) throw new Error('无法连接AI换装服务');
 
-  const reader = resp.body.getReader();
-  const decoder = new TextDecoder('utf-8');
-  let buf = '';
-  const deadline = Date.now() + timeout;
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buf = '';
 
-  while (Date.now() < deadline) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-
-    let idx;
-    while ((idx = buf.indexOf('\n')) >= 0) {
-      const line = buf.slice(0, idx).trim();
-      buf = buf.slice(idx + 1);
-      if (!line.startsWith('data: ')) continue;
-      let msg;
+    while (true) {
+      let done, value;
       try {
-        msg = JSON.parse(line.slice(6));
+        ({ done, value } = await reader.read());
       } catch (e) {
-        continue;
+        throw new Error('AI 换装超时，请重试');
       }
-      if (msg.msg === 'estimation' && typeof msg.rank_eta === 'number' && msg.rank > 0) {
-        updateLoadingText(`AI服务排队中，预计还需约 ${Math.ceil(msg.rank_eta)} 秒...`);
-      } else if (msg.msg === 'process_starts') {
-        updateLoadingText('AI 正在把衣服贴合到真人照片上...');
-      } else if (msg.msg === 'process_generating') {
-        updateLoadingText('AI 正在生成换装效果...');
-      } else if (msg.msg === 'process_completed') {
-        return msg;
-      } else if (msg.msg === 'unexpected_error') {
-        throw new Error(msg.message || 'AI换装服务异常');
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+
+      let idx;
+      while ((idx = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, idx).trim();
+        buf = buf.slice(idx + 1);
+        if (!line.startsWith('data: ')) continue;
+        let msg;
+        try {
+          msg = JSON.parse(line.slice(6));
+        } catch (e) {
+          continue;
+        }
+        if (msg.msg === 'estimation' && typeof msg.rank_eta === 'number' && msg.rank > 0) {
+          updateLoadingText(`AI服务排队中，预计还需约 ${Math.ceil(msg.rank_eta)} 秒...`);
+        } else if (msg.msg === 'process_starts') {
+          updateLoadingText('AI 正在把衣服贴合到真人照片上...');
+        } else if (msg.msg === 'process_generating') {
+          updateLoadingText('AI 正在生成换装效果...');
+        } else if (msg.msg === 'process_completed') {
+          return msg;
+        } else if (msg.msg === 'unexpected_error') {
+          throw new Error(msg.message || 'AI换装服务异常');
+        }
       }
     }
+    throw new Error('AI 换装连接中断，请重试');
+  } finally {
+    clearTimeout(timer);
   }
-  throw new Error('AI 换装超时，请重试');
 }
 
 // Kolors 在线换装：真人照片 + 单品衣服 → 换装效果
