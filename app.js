@@ -1,24 +1,24 @@
 // ==========================================
-// AI 穿搭搭配工具 - 核心逻辑 v8 (本地代理 + IDM-VTON)
+// AI 真人换装搭配工具 - 核心逻辑 v11 (真人照片 + Kolors 在线换装)
 // ==========================================
-console.log('🟢 app.js v8 loaded - Local Proxy + IDM-VTON mode');
+console.log('🟢 app.js v11 loaded - Real Person + Kolors Virtual Try-On');
 
 // ----- 配置 -----
 const CONFIG = {
-  // === 本地代理服务器（server.py）===
-  PROXY_BASE: '',  // 同源，无需设置
-  HAS_PROXY: false, // 是否检测到本地代理（在线静态部署时自动切换为直连模式）
-  PROXY_CHECK_TIMEOUT: 2500, // 代理探测超时(ms)
-  // === 固定模特配置 =====
-  MODEL_REF_IMG: 'images/model_custom.png', // 固定模特参考照片
-  ITEM_IMG_SIZE: 300,      // 单品图片尺寸
-  IMAGE_WIDTH: 576,         // 成果图宽度
-  IMAGE_HEIGHT: 832,        // 成果图高度
-  TIMEOUT: 120000,          // Pollinations 120秒超时
-  VTRYON_TIMEOUT: 300000,   // 虚拟试衣超时5分钟
-  DATA_VERSION: 8,           // 数据版本（v8 = 本地代理模式）
-  // ===== 试衣模式: 'tryon'（虚拟试衣，保持脸部）或 'generate'（快速生成）=====
-  TRYON_MODE: localStorage.getItem('tryon_mode') || 'generate',
+  // === Kolors 在线虚拟试衣 Space（Gradio 4.43，CORS 已放开）====
+  KOLORS_BASE: 'https://kwai-kolors-kolors-virtual-try-on.hf.space',
+  KOLORS_FN_INDEX: 2,
+  KOLORS_TRIGGER_ID: 26,
+  // === 真人照片配置 =====
+  MODEL_REF_IMG: 'images/model_real_00034.jpg', // 内置真人示例照（VITON-HD 真实人像摄影）
+  PERSON_PHOTO_STORAGE_KEY: 'outfitStyler_person_photo',
+  // === 图片尺寸 =====
+  IMAGE_WIDTH: 768,         // 效果图宽度
+  IMAGE_HEIGHT: 1024,       // 效果图高度
+  VTRYON_TIMEOUT: 300000,   // 在线换装超时5分钟
+  JOIN_RETRY_DELAY: 8000,   // 服务繁忙时的重试间隔
+  MAX_RETRY: 3,             // 最大重试次数
+  DATA_VERSION: 11,         // 数据版本（v11 = 真人照片 + Kolors 换装）
 };
 
 // ==========================================
@@ -114,6 +114,7 @@ let state = {
   currentStyle: 'casual',
   isGenerating: false,
   currentResultUrl: '',
+  personImage: localStorage.getItem(CONFIG.PERSON_PHOTO_STORAGE_KEY) || CONFIG.MODEL_REF_IMG,
   customItemImage: null, // modal 临时存储
   editingItemId: null,   // 编辑中的单品 id
   draggedItem: null,
@@ -141,7 +142,6 @@ const dom = {
   resultActions: document.getElementById('resultActions'),
   downloadBtn: document.getElementById('downloadBtn'),
   regenerateBtn: document.getElementById('regenerateBtn'),
-  modelRefBtn: document.getElementById('modelRefBtn'),
   toastContainer: document.getElementById('toastContainer'),
   // Modal
   addClothingBtn: document.getElementById('addClothingBtn'),
@@ -165,15 +165,18 @@ const dom = {
   importBtn: document.getElementById('importBtn'),
   exportBtn: document.getElementById('exportBtn'),
   importInput: document.getElementById('importInput'),
-  // Mode Settings Modal
-  modeBtn: document.getElementById('apiKeyBtn'),
-  modeModal: document.getElementById('apiKeyModal'),
-  modeCloseBtn: document.getElementById('apiKeyCloseBtn'),
-  modeCancelBtn: document.getElementById('apiKeyCancelBtn'),
-  modeSaveBtn: document.getElementById('apiKeySaveBtn'),
-  tryonModeRadio: document.getElementById('tryonModeRadio'),
-  generateModeRadio: document.getElementById('generateModeRadio'),
-  proxyStatus: document.getElementById('proxyStatus'),
+  // Person Photo Modal
+  personPhotoBtn: document.getElementById('personPhotoBtn'),
+  personPhotoBtn2: document.getElementById('personPhotoBtn2'),
+  personPhotoModal: document.getElementById('personPhotoModal'),
+  personPhotoCloseBtn: document.getElementById('personPhotoCloseBtn'),
+  personPhotoCancelBtn: document.getElementById('personPhotoCancelBtn'),
+  personPhotoSaveBtn: document.getElementById('personPhotoSaveBtn'),
+  personPhotoUploadBtn: document.getElementById('personPhotoUploadBtn'),
+  personPhotoResetBtn: document.getElementById('personPhotoResetBtn'),
+  personPhotoInput: document.getElementById('personPhotoInput'),
+  personPhotoModalPreview: document.getElementById('personPhotoModalPreview'),
+  personPhotoPreview: document.getElementById('personPhotoPreview'),
 };
 
 // ==========================================
@@ -197,8 +200,8 @@ function init() {
   renderItems();
   updateItemCount();
   updateSelectedCount();
+  updatePersonPhotoPreview();
   bindEvents();
-  detectProxy();
 }
 
 // ==========================================
@@ -246,14 +249,15 @@ function bindEvents() {
   // 重新生成
   dom.regenerateBtn.addEventListener('click', generateOutfit);
 
-  // 查看模特参考照
-  dom.modelRefBtn.addEventListener('click', showModelRef);
-
-  // Mode Settings Modal
-  dom.modeBtn.addEventListener('click', showModeModal);
-  dom.modeCloseBtn.addEventListener('click', () => dom.modeModal.style.display = 'none');
-  dom.modeCancelBtn.addEventListener('click', () => dom.modeModal.style.display = 'none');
-  dom.modeSaveBtn.addEventListener('click', saveModeSetting);
+  // 真人照片设置
+  dom.personPhotoBtn.addEventListener('click', showPersonPhotoModal);
+  dom.personPhotoBtn2.addEventListener('click', showPersonPhotoModal);
+  dom.personPhotoCloseBtn.addEventListener('click', () => dom.personPhotoModal.style.display = 'none');
+  dom.personPhotoCancelBtn.addEventListener('click', () => dom.personPhotoModal.style.display = 'none');
+  dom.personPhotoSaveBtn.addEventListener('click', savePersonPhoto);
+  dom.personPhotoUploadBtn.addEventListener('click', () => dom.personPhotoInput.click());
+  dom.personPhotoResetBtn.addEventListener('click', resetPersonPhoto);
+  dom.personPhotoInput.addEventListener('change', handlePersonPhotoUpload);
 
   // 添加衣服 Modal
   dom.addClothingBtn.addEventListener('click', openAddModal);
@@ -601,9 +605,8 @@ function deleteSet(id) {
 }
 
 // ==========================================
-// AI 虚拟试衣生成
-// 方案1: IDM-VTON（免费，Hugging Face，保持脸部不变）- 约1-2分钟
-// 方案2: Pollinations 文生图（免费备选，会重新生成模特）- 约10-20秒
+// AI 真人换装（Kolors Virtual Try-On 在线 API）
+// 人像 = 用户上传的真人照片；服装 = 单品库图片；AI 只负责把衣服贴合到真人身上
 // ==========================================
 
 // 获取当前选中服装的图片URL（取第一件选中的服装）
@@ -618,59 +621,14 @@ function getSelectedClothingImage() {
   return null;
 }
 
-// ==========================================
-// AI 虚拟试衣生成
-// 方案1: IDM-VTON（免费，Hugging Face，保持脸部不变）- 约1-2分钟
-// 方案2: Pollinations 文生图（免费备选，会重新生成模特）- 约10-20秒
-// ==========================================
-
-// 获取选中服装的文字描述
-function getGarmentDescription() {
-  const order = ['dress', 'top', 'outerwear', 'bottom', 'shoes', 'accessory', 'bag'];
-  const parts = [];
-  order.forEach(cat => {
-    const item = state.selectedItems[cat];
-    if (item) {
-      parts.push(item.desc || item.name);
-    }
-  });
-  return parts.join(', ') || 'clothing';
+function getPersonPhotoUrl() {
+  return state.personImage || CONFIG.MODEL_REF_IMG;
 }
 
-// IDM-VTON 虚拟试衣（通过本地代理服务器，保持脸部不变）
-async function generateWithIDMVTON() {
-  // 获取服装图片
-  const clothingImgUrl = getSelectedClothingImage();
-  if (!clothingImgUrl) {
-    throw new Error('未找到服装图片');
-  }
-
-  const garmentDes = getGarmentDescription();
-
-  updateLoadingText('正在连接AI服务器...');
-
-  // 通过本地代理调用 IDM-VTON API
-  const resp = await fetch('/api/tryon', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      modelImage: CONFIG.MODEL_REF_IMG,
-      garmentImage: clothingImgUrl,
-      garmentDes: garmentDes,
-    }),
-  });
-
-  if (!resp.ok) {
-    const errData = await resp.json().catch(() => ({ error: `服务器错误 (${resp.status})` }));
-    throw new Error(errData.error || `虚拟试衣失败 (${resp.status})`);
-  }
-
-  const data = await resp.json();
-  if (!data.success) {
-    throw new Error(data.error || '虚拟试衣失败');
-  }
-
-  return data.resultUrl;
+function updatePersonPhotoPreview() {
+  const src = getPersonPhotoUrl();
+  if (dom.personPhotoPreview) dom.personPhotoPreview.src = src;
+  if (dom.personPhotoModalPreview) dom.personPhotoModalPreview.src = src;
 }
 
 function updateLoadingText(text) {
@@ -678,50 +636,125 @@ function updateLoadingText(text) {
   if (el) el.textContent = text;
 }
 
-// Pollinations 文生图（通过本地代理，免费备选）
-async function generateWithPollinations() {
-  const order = ['outerwear', 'top', 'dress', 'bottom', 'shoes', 'accessory', 'bag'];
-  const parts = [];
-  order.forEach(cat => {
-    const item = state.selectedItems[cat];
-    if (item) {
-      if (cat === 'accessory') parts.push(`wearing ${item.desc}`);
-      else if (cat === 'bag') parts.push(`carrying ${item.desc}`);
-      else parts.push(item.desc);
-    }
+// 把任意图片 URL（本地文件 / dataURL / 远端地址）转成 Blob
+async function urlToBlob(url) {
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error('图片读取失败，请更换图片后重试');
+  return resp.blob();
+}
+
+function randomSessionHash() {
+  return 'web' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+}
+
+// 上传文件到 Kolors Space 的 /upload，返回文件路径
+async function kolorsUpload(blob, fileName) {
+  const uploadId = Math.random().toString(36).slice(2, 13);
+  const form = new FormData();
+  form.append('files', blob, fileName);
+  const resp = await fetch(`${CONFIG.KOLORS_BASE}/upload?upload_id=${uploadId}`, {
+    method: 'POST',
+    body: form,
   });
+  if (!resp.ok) throw new Error(`图片上传失败 (${resp.status})`);
+  const data = await resp.json();
+  if (!Array.isArray(data) || !data[0]) throw new Error('图片上传响应异常');
+  const path = data[0];
+  return { path, url: `${CONFIG.KOLORS_BASE}/file=${path}`, orig_name: fileName };
+}
 
-  const styleDesc = STYLES[state.currentStyle]?.desc || '';
-  const itemsStr = parts.join(', ');
-  const prompt = `Fashion portrait of a young Asian woman, slim body type, long dark hair, wearing ${itemsStr}. ${styleDesc}. Beautiful detailed face, photorealistic, studio lighting, white background, 8K.`;
+// 轮询 Gradio SSE 队列，直到 process_completed
+async function kolorsPoll(sessionHash, timeout) {
+  const resp = await fetch(`${CONFIG.KOLORS_BASE}/queue/data?session_hash=${sessionHash}`);
+  if (!resp.ok || !resp.body) throw new Error('无法连接AI换装服务');
 
-  const seed = 42;
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder('utf-8');
+  let buf = '';
+  const deadline = Date.now() + timeout;
 
-  if (CONFIG.HAS_PROXY) {
-    // 本地代理：避免浏览器 CORS 限制
-    const resp = await fetch('/api/generate', {
+  while (Date.now() < deadline) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+
+    let idx;
+    while ((idx = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, idx).trim();
+      buf = buf.slice(idx + 1);
+      if (!line.startsWith('data: ')) continue;
+      let msg;
+      try {
+        msg = JSON.parse(line.slice(6));
+      } catch (e) {
+        continue;
+      }
+      if (msg.msg === 'estimation' && typeof msg.rank_eta === 'number' && msg.rank > 0) {
+        updateLoadingText(`AI服务排队中，预计还需约 ${Math.ceil(msg.rank_eta)} 秒...`);
+      } else if (msg.msg === 'process_starts') {
+        updateLoadingText('AI 正在把衣服贴合到真人照片上...');
+      } else if (msg.msg === 'process_generating') {
+        updateLoadingText('AI 正在生成换装效果...');
+      } else if (msg.msg === 'process_completed') {
+        return msg;
+      } else if (msg.msg === 'unexpected_error') {
+        throw new Error(msg.message || 'AI换装服务异常');
+      }
+    }
+  }
+  throw new Error('AI 换装超时，请重试');
+}
+
+// Kolors 在线换装：真人照片 + 单品衣服 → 换装效果
+async function generateWithKolors() {
+  const clothingImgUrl = getSelectedClothingImage();
+  if (!clothingImgUrl) throw new Error('未找到服装图片');
+  const personUrl = getPersonPhotoUrl();
+
+  updateLoadingText('正在上传真人照片和衣服...');
+  const personBlob = await urlToBlob(personUrl);
+  const garmentBlob = await urlToBlob(clothingImgUrl);
+  const personFile = await kolorsUpload(personBlob, 'person.jpg');
+  const garmentFile = await kolorsUpload(garmentBlob, 'garment.jpg');
+
+  const sessionHash = randomSessionHash();
+  const payload = {
+    data: [
+      { path: personFile.path, url: personFile.url, orig_name: personFile.orig_name },
+      { path: garmentFile.path, url: garmentFile.url, orig_name: garmentFile.orig_name },
+      0,
+      true,
+    ],
+    event_data: null,
+    fn_index: CONFIG.KOLORS_FN_INDEX,
+    trigger_id: CONFIG.KOLORS_TRIGGER_ID,
+    session_hash: sessionHash,
+  };
+
+  // 提交任务；若服务繁忙（Too many users）则自动重试
+  let attempt = 0;
+  while (true) {
+    attempt++;
+    updateLoadingText(attempt > 1 ? `AI服务繁忙，正在进行第 ${attempt} 次重试...` : '正在提交AI换装任务...');
+    const resp = await fetch(`${CONFIG.KOLORS_BASE}/queue/join`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        prompt,
-        width: CONFIG.IMAGE_WIDTH,
-        height: CONFIG.IMAGE_HEIGHT,
-        seed,
-      }),
+      body: JSON.stringify(payload),
     });
-
-    if (!resp.ok) {
-      throw new Error(`图片生成失败 (${resp.status})`);
-    }
-
-    const blob = await resp.blob();
-    return URL.createObjectURL(blob);
+    if (resp.ok) break;
+    if (attempt >= CONFIG.MAX_RETRY) throw new Error('AI 换装服务暂时不可用，请稍后重试');
+    updateLoadingText(`AI服务繁忙，${Math.round(CONFIG.JOIN_RETRY_DELAY / 1000)}秒后自动重试...`);
+    await new Promise(r => setTimeout(r, CONFIG.JOIN_RETRY_DELAY));
   }
 
-  // 在线直连模式（无需后端，适合 GitHub Pages 等静态托管）
-  const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${CONFIG.IMAGE_WIDTH}&height=${CONFIG.IMAGE_HEIGHT}&model=flux&nologo=true&seed=${seed}`;
-  await loadImageWithTimeout(imageUrl, CONFIG.TIMEOUT);
-  return imageUrl;
+  const msg = await kolorsPoll(sessionHash, CONFIG.VTRYON_TIMEOUT);
+  if (!msg.success) {
+    const err = (msg.output && (msg.output.error || (msg.output.data && msg.output.data[2]))) || 'AI换装失败';
+    throw new Error(String(err).includes('Too many users') ? 'AI 服务繁忙，请稍后重试' : String(err));
+  }
+  const out = msg.output && msg.output.data && msg.output.data[0];
+  if (!out || !out.url) throw new Error('AI 未返回换装结果');
+  return out.url;
 }
 
 async function generateOutfit() {
@@ -731,14 +764,17 @@ async function generateOutfit() {
     return;
   }
 
-  const useTryon = CONFIG.TRYON_MODE === 'tryon';
+  // 检查真人照片
+  if (!state.personImage) {
+    showToast('请先上传真人照片', 'warning');
+    showPersonPhotoModal();
+    return;
+  }
 
-  if (useTryon) {
-    // 虚拟试衣每次只换1件服装
-    const clothingCount = ['top', 'dress', 'outerwear', 'bottom', 'shoes'].filter(c => state.selectedItems[c]).length;
-    if (clothingCount > 1) {
-      showToast('虚拟试衣每次换1件服装，将使用第一件', 'warning');
-    }
+  // 每次换装 1 件主服装
+  const clothingCount = ['top', 'dress', 'outerwear', 'bottom', 'shoes'].filter(c => state.selectedItems[c]).length;
+  if (clothingCount > 1) {
+    showToast('每次换装1件服装，将使用第一件单品', 'warning');
   }
 
   state.isGenerating = true;
@@ -749,8 +785,8 @@ async function generateOutfit() {
   dom.resultDisplay.innerHTML = `
     <div class="spinner-wrap">
       <div class="spinner"></div>
-      <p class="loading-text">${useTryon ? 'AI 正在为模特换装...' : 'AI 正在生成穿搭...'}</p>
-      <p class="loading-sub">${useTryon ? '虚拟试衣中，保持脸部不变，预计1-2分钟' : '文生图模式，预计 10-20 秒'}</p>
+      <p class="loading-text">正在提交AI换装任务...</p>
+      <p class="loading-sub">真人照片保持不变，AI 只替换衣服，预计 30-90 秒</p>
     </div>
   `;
   dom.resultActions.style.display = 'none';
@@ -759,94 +795,47 @@ async function generateOutfit() {
   // 显示搭配摘要
   renderResultSummary();
 
-  // 加载进度计时器（虚拟试衣模式）
-  let loadingTimer = null;
-  if (useTryon) {
-    const startTime = Date.now();
-    loadingTimer = setInterval(() => {
-      const elapsed = Math.floor((Date.now() - startTime) / 1000);
-      if (elapsed < 10) {
-        updateLoadingText('正在连接AI服务器...');
-      } else if (elapsed < 30) {
-        updateLoadingText('正在上传图片...');
-      } else if (elapsed < 60) {
-        updateLoadingText(`AI正在换装中... 已等待${elapsed}秒`);
-      } else if (elapsed < 120) {
-        updateLoadingText(`AI正在换装中... 已等待${elapsed}秒，请耐心等待`);
-      } else {
-        updateLoadingText(`仍在处理中... 已等待${elapsed}秒`);
-      }
-    }, 3000);
-  }
+  // 加载进度计时器
+  const startTime = Date.now();
+  const loadingTimer = setInterval(() => {
+    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    if (elapsed >= 30 && elapsed % 15 === 0) {
+      updateLoadingText(`AI 正在换装... 已等待 ${elapsed} 秒`);
+    }
+  }, 3000);
 
   try {
-    let resultUrl;
-
-    if (useTryon) {
-      try {
-        resultUrl = await generateWithIDMVTON();
-      } catch (tryonErr) {
-        // 虚拟试衣失败 - 不再静默回退，而是询问用户
-        console.warn('虚拟试衣失败:', tryonErr);
-        if (loadingTimer) clearInterval(loadingTimer);
-        state.isGenerating = false;
-        updateGenerateButton();
-        dom.resultDisplay.classList.remove('loading');
-
-        const tryonErrorMsg = tryonErr.message || '未知错误';
-        dom.resultDisplay.innerHTML = `
-          <div class="result-error">
-            <div class="result-error-icon">⚠️</div>
-            <p style="font-size:14px;font-weight:600;">虚拟试衣失败</p>
-            <p style="font-size:11px;color:#94a3b8;margin-top:6px;line-height:1.5;">
-              AI 服务器可能暂时不可用<br>
-              （Hugging Face IDM-VTON Space 近期可能维护中）
-            </p>
-            <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px;">
-              <button class="btn btn-primary btn-sm" onclick="retryTryon()">🔄 重新试衣</button>
-              <button class="btn btn-secondary btn-sm" onclick="switchToGenerate()">⚡ 切换到快速生成</button>
-            </div>
-          </div>
-        `;
-        showToast('虚拟试衣失败，可重试或切换模式', 'warning');
-        return;
-      }
-    } else {
-      resultUrl = await generateWithPollinations();
-    }
-
+    const resultUrl = await generateWithKolors();
     state.currentResultUrl = resultUrl;
     state.isGenerating = false;
-
-    // 清除加载计时器
-    if (loadingTimer) clearInterval(loadingTimer);
+    clearInterval(loadingTimer);
 
     dom.resultDisplay.classList.remove('loading');
-    dom.resultDisplay.innerHTML = `<img src="${resultUrl}" alt="AI 换装效果" onerror="this.parentElement.innerHTML='<div class=\\'result-error\\'><div class=\\'result-error-icon\\'>🖼️</div><p>图片加载失败</p><p style=\\'font-size:11px;color:#94a3b8;\\'>${resultUrl}</p></div>';">`;
+    dom.resultDisplay.innerHTML = `<img src="${resultUrl}" alt="AI 真人换装效果" onerror="this.parentElement.innerHTML='<div class=\\'result-error\\'><div class=\\'result-error-icon\\'>🖼️</div><p>图片加载失败</p><p style=\\'font-size:11px;color:#94a3b8;\\'>${resultUrl}</p></div>';">`;
     dom.resultActions.style.display = 'flex';
     updateGenerateButton();
-    showToast(useTryon ? '换装成功！脸部已保持不变' : '穿搭生成成功！', 'success');
+    showToast('换装成功！真人照片保持不变，衣服已贴合', 'success');
     saveToStorage();
   } catch (err) {
     state.isGenerating = false;
     updateGenerateButton();
-
-    // 清除加载计时器
-    if (loadingTimer) clearInterval(loadingTimer);
+    clearInterval(loadingTimer);
     dom.resultDisplay.classList.remove('loading');
 
     const errorMsg = err.message || '未知错误';
-
     dom.resultDisplay.innerHTML = `
       <div class="result-error">
         <div class="result-error-icon">⚠️</div>
-        <p>生成失败</p>
+        <p>换装失败</p>
         <p style="font-size:11px;color:#94a3b8;margin-top:4px;">${errorMsg}</p>
-        <p style="font-size:11px;color:#f59e0b;margin-top:4px;">请检查网络连接后重试</p>
-        <button class="btn btn-secondary btn-sm" style="margin-top:8px;" onclick="switchToGenerate()">切换到快速生成模式</button>
+        <p style="font-size:11px;color:#f59e0b;margin-top:4px;">AI 服务为免费在线接口，高峰期可能繁忙，请稍后重试</p>
+        <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px;">
+          <button class="btn btn-primary btn-sm" onclick="retryTryon()">🔄 重新换装</button>
+          <button class="btn btn-secondary btn-sm" onclick="showPersonPhotoModal()">📷 更换真人照片</button>
+        </div>
       </div>
     `;
-    showToast('生成失败，请重试', 'error');
+    showToast('换装失败，请重试', 'error');
   }
 }
 
@@ -978,70 +967,64 @@ function downloadResult() {
 // ==========================================
 // 查看模特参考照
 // ==========================================
-function showModelRef() {
-  // 创建临时模态层展示模特参考照
-  let modal = document.getElementById('modelRefModal');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'modelRefModal';
-    modal.className = 'modal-overlay';
-    modal.style.display = 'flex';
-    modal.innerHTML = `
-      <div class="modal" style="max-width: 360px;">
-        <div class="modal-header">
-          <h3>固定模特参考照</h3>
-          <button class="modal-close" onclick="document.getElementById('modelRefModal').style.display='none'">×</button>
-        </div>
-        <div class="modal-body" style="text-align: center;">
-          <img src="${CONFIG.MODEL_REF_IMG}" alt="固定模特" style="max-width: 100%; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
-          <p style="display:none; color: #94a3b8; padding: 40px;">模特照片加载失败</p>
-          <p style="font-size: 12px; color: #64748b; margin-top: 12px; line-height: 1.6;">
-            AI 将基于此模特的固定面部特征和体型生成穿搭效果。<br>
-            每次换装仅改变服装，模特本人保持一致。
-          </p>
-        </div>
-      </div>
-    `;
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) modal.style.display = 'none';
-    });
-    document.body.appendChild(modal);
-  } else {
-    modal.style.display = 'flex';
-  }
+// ==========================================
+// 真人照片管理
+// ==========================================
+function showPersonPhotoModal() {
+  updatePersonPhotoPreview();
+  dom.personPhotoModal.style.display = 'flex';
 }
 
-// ==========================================
-// 试衣模式设置
-// ==========================================
-function showModeModal() {
-  dom.modeModal.style.display = 'flex';
-  const currentMode = localStorage.getItem('tryon_mode') || 'tryon';
-  dom.tryonModeRadio.checked = currentMode === 'tryon';
-  dom.generateModeRadio.checked = currentMode !== 'tryon';
-  dom.tryonModeRadio.disabled = !CONFIG.HAS_PROXY;
-  dom.proxyStatus.textContent = CONFIG.HAS_PROXY
-    ? '本地代理：已连接（支持虚拟试衣模式）'
-    : '本地代理：未连接（在线版自动使用快速生成）';
-}
-
-function saveModeSetting() {
-  if (dom.tryonModeRadio.checked && !CONFIG.HAS_PROXY) {
-    showToast('当前环境未连接本地代理，无法使用虚拟试衣', 'warning');
+function handlePersonPhotoUpload(e) {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) {
+    showToast('请选择图片文件', 'warning');
     return;
   }
-  const mode = dom.tryonModeRadio.checked ? 'tryon' : 'generate';
-  localStorage.setItem('tryon_mode', mode);
-  CONFIG.TRYON_MODE = mode;
-  dom.modeModal.style.display = 'none';
-  showToast(mode === 'tryon' ? '已切换到虚拟试衣模式（保持脸部，约1-2分钟）' : '已切换到快速生成模式（10-20秒）', 'success');
+  const reader = new FileReader();
+  reader.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      // 压缩到宽度 768，避免超出 localStorage 容量
+      const maxW = 768;
+      const scale = Math.min(1, maxW / img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      state.personImage = canvas.toDataURL('image/jpeg', 0.88);
+      updatePersonPhotoPreview();
+      showToast('真人照片已选择，点击"保存"生效', 'info');
+    };
+    img.src = reader.result;
+  };
+  reader.readAsDataURL(file);
+  e.target.value = '';
 }
 
-function switchToGenerate() {
-  localStorage.setItem('tryon_mode', 'generate');
-  CONFIG.TRYON_MODE = 'generate';
-  showToast('已切换到快速生成模式', 'info');
-  generateOutfit();
+function savePersonPhoto() {
+  if (!state.personImage) {
+    showToast('请先上传真人照片', 'warning');
+    return;
+  }
+  try {
+    localStorage.setItem(CONFIG.PERSON_PHOTO_STORAGE_KEY, state.personImage);
+  } catch (err) {
+    showToast('照片较大，保存失败，请换一张', 'error');
+    return;
+  }
+  dom.personPhotoModal.style.display = 'none';
+  updatePersonPhotoPreview();
+  showToast('真人照片已保存，AI 换装将使用这张照片', 'success');
+}
+
+function resetPersonPhoto() {
+  state.personImage = CONFIG.MODEL_REF_IMG;
+  localStorage.removeItem(CONFIG.PERSON_PHOTO_STORAGE_KEY);
+  updatePersonPhotoPreview();
+  showToast('已恢复内置真人示例照', 'info');
 }
 
 function retryTryon() {
@@ -1236,33 +1219,6 @@ function loadFromStorage() {
     if (style) state.currentStyle = style;
   } catch (e) {
     console.warn('加载失败', e);
-  }
-}
-
-// ==========================================
-// 本地代理探测：有代理用虚拟试衣/本地生图，无代理自动切直连模式
-// ==========================================
-async function detectProxy() {
-  try {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), CONFIG.PROXY_CHECK_TIMEOUT);
-    const resp = await fetch('/api/health', { signal: ctrl.signal });
-    clearTimeout(timer);
-    if (resp.ok) {
-      CONFIG.HAS_PROXY = true;
-      if (dom.proxyStatus) dom.proxyStatus.textContent = '本地代理：已连接（支持虚拟试衣模式）';
-      return;
-    }
-  } catch (e) {
-    // 网络错误视为无代理
-  }
-
-  CONFIG.HAS_PROXY = false;
-  if (dom.proxyStatus) dom.proxyStatus.textContent = '本地代理：未连接（在线版自动使用快速生成）';
-  if (CONFIG.TRYON_MODE === 'tryon') {
-    CONFIG.TRYON_MODE = 'generate';
-    localStorage.setItem('tryon_mode', 'generate');
-    showToast('在线环境已自动切换到快速生成模式', 'info');
   }
 }
 
