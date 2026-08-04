@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="referrer" content="no-referrer">
   <title>AI 真人换装搭配工具 - OUTFIT PREVIEW</title>
-  <link rel="stylesheet" href="style.css?v=13">
+  <link rel="stylesheet" href="style.css?v=14">
 </head>
 <body>
   <!-- Header -->
@@ -96,7 +96,7 @@
       <div class="result-display" id="resultDisplay">
         <div class="result-empty">
           <div class="model-ref-wrap">
-            <img src="images/model_real_00034.jpg" alt="真人照片" class="model-ref-img" id="personPhotoPreview" onerror="this.style.display='none'">
+            <img src="images/model_user.png" alt="真人照片" class="model-ref-img" id="personPhotoPreview" onerror="this.style.display='none'">
             <div class="model-ref-label">真人照片</div>
           </div>
           <p class="empty-title">等待换装</p>
@@ -207,7 +207,7 @@
           </ul>
         </div>
         <div class="person-photo-preview-wrap">
-          <img id="personPhotoModalPreview" src="images/model_real_00034.jpg" alt="真人照片预览">
+          <img id="personPhotoModalPreview" src="images/model_user.png" alt="真人照片预览">
         </div>
         <div class="form-group" style="margin-top:14px;">
           <input type="file" id="personPhotoInput" accept="image/*" style="display:none;">
@@ -230,6 +230,6 @@
   <!-- Hidden file input for import -->
   <input type="file" id="importInput" accept=".json" style="display:none;">
 
-  <script src="app.js?v=13"></script>
+  <script src="app.js?v=14"></script>
 </body>
 </html>
