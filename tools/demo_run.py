@@ -99,7 +99,7 @@ with sync_playwright() as p:
     # 5) 打开真人照片设置，上传另一张真实照片（演示可换真人）
     page.click('#personPhotoBtn')
     page.wait_for_timeout(1000)
-    page.set_input_files('#personPhotoInput', str(BASE / 'images' / 'model_user.png'))
+    page.set_input_files('#personPhotoInput', str(BASE / 'images' / 'model_user.webp'))
     page.wait_for_timeout(2500)
     shot('06_person_photo')
     page.click('#personPhotoSaveBtn')

@@ -1,7 +1,7 @@
 // ==========================================
-// AI 真人换装搭配工具 - 核心逻辑 v14 (真人照片 + Kolors 在线换装)
+// AI 真人换装搭配工具 - 核心逻辑 v15 (真人照片 + Kolors 在线换装 + WebP 提速)
 // ==========================================
-console.log('🟢 app.js v14 loaded - Real Person + Kolors Virtual Try-On');
+console.log('🟢 app.js v15 loaded - Real Person + Kolors Virtual Try-On');
 
 // ----- 配置 -----
 const CONFIG = {
@@ -10,7 +10,7 @@ const CONFIG = {
   KOLORS_FN_INDEX: 2,
   KOLORS_TRIGGER_ID: 26,
   // === 真人照片配置 =====
-  MODEL_REF_IMG: 'images/model_user.png', // 默认真人照片（用户指定）
+  MODEL_REF_IMG: 'images/model_user.webp', // 默认真人照片（用户指定，WebP 优化）
   PERSON_PHOTO_STORAGE_KEY: 'outfitStyler_person_photo',
   // === 图片尺寸 =====
   IMAGE_WIDTH: 768,         // 效果图宽度
@@ -29,7 +29,7 @@ function getItemImageUrl(item) {
   // 用户上传的自定义图片优先
   if (item.image) return item.image;
   // 使用本地下载的真实服装图片（来自 Unsplash 免费商用图库）
-  return `images/${item.id}.jpg`;
+  return `images/${item.id}.webp`;
 }
 
 // 图片加载失败时回退到 emoji
@@ -361,7 +361,7 @@ function renderItems() {
     return `
       <div class="item-card ${isSelected ? 'selected' : ''}" draggable="true" data-id="${item.id}">
         <div class="item-card-img">
-          <img src="${imgUrl}" alt="${item.name}" loading="lazy" data-emoji="${item.emoji}" onerror="imgFallback(this)">
+          <img src="${imgUrl}" alt="${item.name}" loading="lazy" decoding="async" data-emoji="${item.emoji}" onerror="imgFallback(this)">
         </div>
         <div class="item-card-name">${item.name}</div>
         <div class="item-card-tags">
