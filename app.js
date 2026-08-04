@@ -1,7 +1,7 @@
 // ==========================================
-// AI 真人换装搭配工具 - 核心逻辑 v11 (真人照片 + Kolors 在线换装)
+// AI 真人换装搭配工具 - 核心逻辑 v12 (真人照片 + Kolors 在线换装)
 // ==========================================
-console.log('🟢 app.js v11 loaded - Real Person + Kolors Virtual Try-On');
+console.log('🟢 app.js v12 loaded - Real Person + Kolors Virtual Try-On');
 
 // ----- 配置 -----
 const CONFIG = {
